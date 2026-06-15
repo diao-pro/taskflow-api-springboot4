@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: taskflow-api-test
+
+  datasource:
+    url: jdbc:h2:mem:taskflowtestdb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+  threads:
+    virtual:
+      enabled: true
+
+app:
+  jwt:
+    secret: "Y2hhbmdlLW1lLXRhc2tmbG93LXNlY3JldC1rZXktMjU2LWJpdHMtbWluaW11bS1sZW5ndGgtcmVxdWlyZWQ="
+    expiration-ms: 3600000
