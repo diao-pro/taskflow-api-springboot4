@@ -44,7 +44,7 @@ public class OpenAPIConfig {
      * Personnalise OpenAPI pour injecter l'en-tête X-API-Version globalement
      * sur chaque endpoint de la documentation Swagger UI.
      */
-    @Bean
+    /*@Bean
     public OpenApiCustomizer globalHeaderCustomizer() {
         return openApi -> {
             // Création de la définition du paramètre d'en-tête
@@ -62,7 +62,7 @@ public class OpenAPIConfig {
                     )
             );
         };
-    }
+    }*/
 
     /**
      * Configure et fournit un bean GroupedOpenApi pour la version 1 de l'API.
@@ -76,6 +76,8 @@ public class OpenAPIConfig {
         return GroupedOpenApi.builder()
                 .group("Version 1 (Legacy)")
                 .pathsToMatch("/api/v1/**")
+                // On force l'injection du header personnalisé pour ce groupe
+                .addOpenApiCustomizer(getVersionHeaderCustomizer("1"))
                 // Filtre : On garde la méthode si la version est vide ou si elle vaut "1"
                 .addOpenApiMethodFilter(method -> {
                     org.springframework.web.bind.annotation.RequestMapping requestMapping =
@@ -99,6 +101,8 @@ public class OpenAPIConfig {
         return GroupedOpenApi.builder()
                 .group("Version 2 (Nouvelle)")
                 .pathsToMatch("/api/v1/**")
+                // Correction : On force l'injection du header personnalisé pour ce groupe avec "2" par défaut
+                .addOpenApiCustomizer(getVersionHeaderCustomizer("2"))
                 // Filtre : On garde la méthode uniquement si la version vaut explicitement "2"
                 .addOpenApiMethodFilter(method -> {
                     org.springframework.web.bind.annotation.RequestMapping requestMapping =
@@ -111,4 +115,31 @@ public class OpenAPIConfig {
     }
 
 
+
+
+    /**
+     * Logique réutilisable pour injecter l'en-tête X-API-Version dans un contexte OpenAPI.
+     */
+    private OpenApiCustomizer getVersionHeaderCustomizer(String defaultVersion) {
+        return openApi -> {
+            if (openApi.getPaths() != null) {
+                // On parcourt chaque route (ex: "/api/v1/tasks/{id}", "/api/v1/projects", etc.)
+                openApi.getPaths().forEach((path, pathItem) -> {
+                    // CONDITION : On cible uniquement la route qui se termine par /tasks/{id}
+                    if (path.endsWith("/tasks/{id}")) {
+                        pathItem.readOperations().forEach(operation -> {
+                            Parameter versionHeader = new Parameter()
+                                    .in("header")
+                                    .name("X-API-Version")
+                                    .description("Version de l'API cible (1 ou 2)")
+                                    .required(false)
+                                    .schema(new StringSchema()._default(defaultVersion));
+
+                            operation.addParametersItem(versionHeader);
+                        });
+                    }
+                });
+            }
+        };
+    }
 }
