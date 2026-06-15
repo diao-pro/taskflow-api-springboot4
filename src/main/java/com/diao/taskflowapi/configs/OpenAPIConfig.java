@@ -3,8 +3,12 @@ package com.diao.taskflowapi.configs;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.media.StringSchema;
+import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springdoc.core.customizers.OpenApiCustomizer;
+import org.springdoc.core.models.GroupedOpenApi;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -35,4 +39,76 @@ public class OpenAPIConfig {
                                 .scheme("Bearer")
                                 .bearerFormat("JWT")));
     }
+
+    /**
+     * Personnalise OpenAPI pour injecter l'en-tête X-API-Version globalement
+     * sur chaque endpoint de la documentation Swagger UI.
+     */
+    @Bean
+    public OpenApiCustomizer globalHeaderCustomizer() {
+        return openApi -> {
+            // Création de la définition du paramètre d'en-tête
+            Parameter versionHeader = new Parameter()
+                    .in("header")
+                    .name("X-API-Version")
+                    .description("Version de l'API cible (1 ou 2)")
+                    .required(false) // Optionnel car géré par setDefaultVersion("1") côté Spring
+                    .schema(new StringSchema()._default("1")); // Valeur par défaut dans Swagger
+
+            // Injection du paramètre dans toutes les opérations de toutes les routes
+            openApi.getPaths().values().forEach(pathItem ->
+                    pathItem.readOperations().forEach(operation ->
+                            operation.addParametersItem(versionHeader)
+                    )
+            );
+        };
+    }
+
+    /**
+     * Configure et fournit un bean GroupedOpenApi pour la version 1 de l'API.
+     * Cette configuration regroupe les points de terminaison sous '/api/v1/**' et les étiquette
+     * comme « Version 1 (Legacy) » dans la documentation de l'API.
+     *
+     * @return une instance GroupedOpenApi configurée pour la version 1 de l'API.
+     */
+    @Bean
+    public GroupedOpenApi v1Api() {
+        return GroupedOpenApi.builder()
+                .group("Version 1 (Legacy)")
+                .pathsToMatch("/api/v1/**")
+                // Filtre : On garde la méthode si la version est vide ou si elle vaut "1"
+                .addOpenApiMethodFilter(method -> {
+                    org.springframework.web.bind.annotation.RequestMapping requestMapping =
+                            org.springframework.core.annotation.AnnotatedElementUtils.findMergedAnnotation(method, org.springframework.web.bind.annotation.RequestMapping.class);
+                    if (requestMapping == null) return true;
+                    String version = requestMapping.version();
+                    return version.isEmpty() || version.equals("1");
+                })
+                .build();
+    }
+
+    /**
+     * Configure et fournit un bean {@link GroupedOpenApi} pour l'API version 2.
+     * Cette configuration regroupe les points de terminaison sous '/api/v1/**' et les étiquette
+     * comme « Version 2 (Nouvelle) » dans la documentation de l'API.
+     *
+     * @return une instance de {@link GroupedOpenApi} configurée pour la version 2 de l'API.
+     */
+    @Bean
+    public GroupedOpenApi v2Api() {
+        return GroupedOpenApi.builder()
+                .group("Version 2 (Nouvelle)")
+                .pathsToMatch("/api/v1/**")
+                // Filtre : On garde la méthode uniquement si la version vaut explicitement "2"
+                .addOpenApiMethodFilter(method -> {
+                    org.springframework.web.bind.annotation.RequestMapping requestMapping =
+                            org.springframework.core.annotation.AnnotatedElementUtils.findMergedAnnotation(method, org.springframework.web.bind.annotation.RequestMapping.class);
+                    if (requestMapping == null) return false;
+                    String version = requestMapping.version();
+                    return version.equals("2");
+                })
+                .build();
+    }
+
+
 }
